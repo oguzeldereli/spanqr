@@ -1,0 +1,28 @@
+NVIDIA GeForce RTX 5060 Ti  (ms, median; lat = isolated call, thr = back-to-back)
+shape       method                    lat      thr  x hh(thr)   x gemm
+768x512    (one GEMM)              0.054    0.042
+            householder             2.017    2.017       1.00     48.4
+            kcholf                  1.247    1.085       1.86     26.0
+1024x256    (one GEMM)              0.034    0.021
+            householder             1.073    1.059       1.00     50.1
+            kcholf                  0.899    0.873       1.21     41.3
+2048x256    (one GEMM)              0.035    0.023
+            householder             1.313    1.305       1.00     56.2
+            kcholf                  0.893    0.872       1.50     37.6
+2048x512    (one GEMM)              0.103    0.089
+            householder             2.899    2.888       1.00     32.4
+            kcholf                  1.651    1.543       1.87     17.3
+3584x256    (one GEMM)              0.063    0.050
+            householder             2.047    2.043       1.00     40.7
+            kcholf                  0.954    0.876       2.33     17.4
+5120x256    (one GEMM)              0.079    0.066
+            householder             2.312    2.306       1.00     34.8
+            kcholf                  1.081    0.938       2.46     14.2
+6144x256    (one GEMM)              0.083    0.070
+            householder             2.666    2.664       1.00     38.0
+            kcholf                  1.162    1.037       2.57     14.8
+17408x256    (one GEMM)              0.220    0.204
+            householder             5.758    5.765       1.00     28.3
+            kcholf                  2.392    2.343       2.46     11.5
+
+110M step estimate (84 calls): householder 180 ms  kcholf 97 ms

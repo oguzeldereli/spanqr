@@ -116,9 +116,15 @@ template <typename T, bool F32COPY>
 __device__ void factor_diag(T* L, T* Li, float* Lf, float* Lif, int n, int j, T tau, Smem<T>& S) {
     const int tid = threadIdx.x;
     __syncthreads();
-    if (tid < 32) {
-        const int i = tid;
-        T a[TB];
+    // fp32: every warp factors the tile redundantly in registers (lane i holds row i) and only warp 0 stores. No branch
+    // may surround the shuffles: on sm_120 a shuffle under `if (tid < 32)` or next to a branch gets wrapped in
+    // WARPSYNC / convergence barriers, which made this loop 36x slower than on sm_89 (compute_90 code was unaffected).
+    // fp64: warp 0 only (8 warps of redundant fp64 work would fight over the few fp64 units of consumer GPUs).
+    constexpr bool RED = sizeof(T) == 4;
+    const int i = tid & 31;
+    T a[TB];
+    T myrd = T(0);
+    if (RED || tid < 32) {
         #pragma unroll
         for (int k = 0; k < TB; ++k) a[k] = S.a[i][k];
         #pragma unroll
@@ -126,16 +132,20 @@ __device__ void factor_diag(T* L, T* Li, float* Lf, float* Lif, int n, int j, T 
             T piv = fmax(__shfl_sync(0xffffffffu, a[c], c), tau);
             T rd = rsqrt_(piv);
             T l = (i > c) ? a[c] * rd : ((i == c) ? piv * rd : T(0));
-            if (i == c) S.rd[c] = rd;
+            myrd = (i == c) ? rd : myrd;
             a[c] = l;
             #pragma unroll
             for (int k = c + 1; k < TB; ++k) {
                 T lk = __shfl_sync(0xffffffffu, l, k);
-                if (i >= k) a[k] -= l * lk;
+                a[k] -= ((i >= k) ? l : T(0)) * lk;
             }
         }
+    }
+    if (RED) __syncthreads();             // all warps have read S.a before warp 0 overwrites it
+    if (tid < 32) {
         #pragma unroll
         for (int k = 0; k < TB; ++k) S.a[i][k] = (k <= i) ? a[k] : T(0);
+        S.rd[i] = myrd;
     }
     __syncthreads();
     if (tid < 32) {                       // inverse: lane kk computes column kk by forward substitution

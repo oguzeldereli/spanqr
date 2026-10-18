@@ -51,9 +51,9 @@ The plain-words version, including why every earlier method failed, is in [METHO
 4. **Two Newton-Schulz polish steps,** written as a small correction, the last one with a compensated (Kahan)
    split-K Gram. Orthogonality reaches ~1e-7, below fp32 Householder's.
 
-## Results (RTX 4080 Laptop, fp32)
+## Results
 
-**Accuracy:**
+**Accuracy** (RTX 4080 Laptop, Ada; the same synthetic suite and a real subset also pass on an RTX 5060 Ti, Blackwell):
 - **Synthetic:** all 208 acceptance cases and all 144 extra robustness cases at the 8 TTF shapes (2 seeds), with
   condition numbers up to 1e14, rank 1, zero blocks, duplicated columns, and scales of 1e-25 and 1e25.
 - **Real:** all 528 X matrices dumped from TTF training runs (110M x 2 runs and 27B).
@@ -61,20 +61,23 @@ The plain-words version, including why every earlier method failed, is in [METHO
   data and 2.1x on real data (limit: 10x).
 - **Hygiene:** deterministic, no host sync, input untouched.
 
-**Speed** (median, back-to-back calls; the laptop's boost clock moves numbers by ~20% between runs):
+**Speed** (fp32, median of back-to-back calls; the laptop's boost clock moves numbers by ~20% between runs):
 
-| K x r (TTF layer) | Householder | spanqr | speedup |
-|---|---|---|---|
-| 768 x 512 (110M) | 2.08 ms | 1.10 ms | 1.9x |
-| 2048 x 512 (110M down_proj) | 2.69 ms | 1.43-1.89 ms | 1.4-1.9x |
-| 1024 x 256 (0.8B) | 1.08 ms | 0.47 ms | 2.3x |
-| 2048 x 256 (0.8B) | 1.32 ms | 0.57 ms | 2.3x |
-| 3584 x 256 (0.8B) | 2.88 ms | 0.79 ms | 3.7x |
-| 5120 x 256 (27B) | 2.32 ms | 0.83 ms | 2.8x |
-| 6144 x 256 (27B) | 2.73 ms | 0.93-1.10 ms | 2.5-2.9x |
-| 17408 x 256 (27B down_proj) | 5.04 ms | 1.88-2.71 ms | 1.9-2.7x |
+| K x r (TTF layer) | Householder, 4080 Laptop | spanqr, 4080 Laptop | Householder, 5060 Ti | spanqr, 5060 Ti |
+|---|---|---|---|---|
+| 768 x 512 (110M) | 1.9-2.1 ms | 1.1 ms (1.6-1.9x) | 2.02 ms | 1.09 ms (1.9x) |
+| 2048 x 512 (110M down_proj) | 2.7 ms | 1.4-1.9 ms (1.4-1.9x) | 2.89 ms | 1.54 ms (1.9x) |
+| 1024 x 256 (0.8B) | 1.09 ms | 0.47-0.53 ms (2.1-2.3x) | 1.06 ms | 0.87 ms (1.2x)* |
+| 2048 x 256 (0.8B) | 1.32 ms | 0.57-0.64 ms (2.1-2.3x) | 1.31 ms | 0.87 ms (1.5x)* |
+| 3584 x 256 (0.8B) | 2.9 ms | 0.79-0.82 ms (3.5-3.7x) | 2.04 ms | 0.88 ms (2.3x) |
+| 5120 x 256 (27B) | 2.3 ms | 0.83-1.04 ms (2.2-2.8x) | 2.31 ms | 0.94 ms (2.5x) |
+| 6144 x 256 (27B) | 2.7 ms | 0.93-1.13 ms (2.5-2.9x) | 2.66 ms | 1.04 ms (2.6x) |
+| 17408 x 256 (27B down_proj) | 5.1 ms | 1.9-2.8 ms (1.8-2.7x) | 5.77 ms | 2.34 ms (2.5x) |
 
-At 110M the QR time per training step drops from ~180 ms to ~100 ms.
+\* CPU-bound on that machine: about 0.9 ms of Python launch work per call on its i5-11400F (0.5 ms on an i9-14900HX).
+A CUDA graph per shape would remove it.
+
+At 110M the QR time per training step drops from ~170-180 ms to ~100 ms.
 
 **Target vs reached.** The goal was 5x. What limits it:
 - **r = 512 (110M):** three sequential 512 x 512 Choleskys cost ~0.2 ms each even hand-written. The critical path is
@@ -89,14 +92,21 @@ At 110M the QR time per training step drops from ~180 ms to ~100 ms.
 
 | file | kernel | vs library |
 |---|---|---|
-| `candidates/cuk/chol.cu` | Lower Cholesky with pivot clamping in **one cooperative kernel** (all SMs, one grid barrier per 32-column step, look-ahead factor of the next diagonal tile in one warp's registers, diagonal-tile inverses as a by-product). float and double. | r=256: 0.07 ms (cuSOLVER 0.20); r=512: 0.21 ms (cuSOLVER 0.44) |
+| `candidates/cuk/chol.cu` | Lower Cholesky with pivot clamping in **one cooperative kernel** (all SMs, one grid barrier per 32-column step, look-ahead factor of the next diagonal tile in one warp's registers, diagonal-tile inverses as a by-product). float and double. | 4080 Laptop r=256: 0.08-0.09 ms (cuSOLVER 0.20), r=512: 0.22-0.24 ms (cuSOLVER 0.44); 5060 Ti r=512: 0.16 ms (cuSOLVER 0.32) |
 | `candidates/tri.py: trsm_f` | Triangular solve Y = (s X + eps Z) L^-T, rows in parallel, tf32x3 tensor-core dots (fp32-accurate), scale and dust fused into the load | 3-4x faster than cuBLAS trsm |
 | `candidates/tri.py: gram_f, gram_split` | Gram A^T A: upper tiles only, Kahan-compensated within a K split, fp64 sum across splits, optional fused scale/dust | 5-10x more accurate than cuBLAS sgemm |
 | `candidates/cudak.py` | Runtime build/launch: **NVRTC** (the wheel that ships with PyTorch) and the CUDA driver API via `cuda-python`, on PyTorch's current stream | no CUDA toolkit or host compiler needed |
 
 The CUDA kernels compile on first use (a few seconds) and are cached in `candidates/cuk/build/`.
 
-**Requirements:** PyTorch with CUDA, Triton, and `cuda-python`. NVRTC builds a native cubin for every architecture it
+A Blackwell lesson baked into `chol.cu`: on sm_120 the compiler wraps a warp shuffle in `WARPSYNC`/convergence
+barriers when it sits under a condition like `if (tid < 32)` or next to a branch (724 `WARPSYNC`s vs 5 on sm_89). That
+made the in-register 32 x 32 tile factor 36x slower (Cholesky 1.30 ms instead of 0.16 ms), while the same source built as
+compute_90 PTX ran fine on the same card. The fp32 tile factor is now branch-free and run by every warp (only warp 0
+stores).
+
+**Requirements:** PyTorch with CUDA, Triton (which needs a host C compiler such as `gcc` for its launch stubs), and
+`cuda-python`. NVRTC builds a native cubin for every architecture it
 knows (NVRTC 12.6 from cu126 PyTorch: up to sm_90; NVRTC >= 12.8 from cu128 PyTorch: also Blackwell sm_120). For a GPU
 newer than the local NVRTC it falls back to PTX for the newest known architecture, which the driver JIT-compiles.
 
