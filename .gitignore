@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+# real matrices dumped from training runs (large; capture your own with qrbench/dump.py)
+dumps/
+# NVRTC compile cache
+candidates/cuk/build/

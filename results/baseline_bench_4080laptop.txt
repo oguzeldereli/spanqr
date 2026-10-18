@@ -1,0 +1,20 @@
+NVIDIA GeForce RTX 4080 Laptop GPU  (ms, median; lat = isolated call, thr = back-to-back)
+shape       method                    lat      thr  x hh(thr)   x gemm
+768x512    (one GEMM)              0.052    0.048
+            householder             2.684    1.869       1.00     39.3
+            cholqr2_fp32            1.061    1.057       1.77     22.2
+            cholqr2_fp64            5.593    5.536       0.34    116.3
+2048x512    (one GEMM)              0.071    0.066
+            householder             3.092    2.698       1.00     40.7
+            cholqr2_fp32            1.411    1.417       1.90     21.4
+            cholqr2_fp64           11.824   11.815       0.23    178.4
+5120x256    (one GEMM)              0.054    0.049
+            householder             2.483    2.337       1.00     48.0
+            cholqr2_fp32            0.857    0.869       2.69     17.8
+            cholqr2_fp64            6.539    6.536       0.36    134.1
+17408x256    (one GEMM)              0.123    0.119
+            householder             5.117    5.074       1.00     42.7
+            cholqr2_fp32            1.838    2.183       2.32     18.4
+            cholqr2_fp64           20.933   20.923       0.24    176.1
+
+110M step estimate (84 calls): householder 167 ms  cholqr2_fp32 93 ms  cholqr2_fp64 540 ms
