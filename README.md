@@ -96,8 +96,9 @@ At 110M the QR time per training step drops from ~180 ms to ~100 ms.
 
 The CUDA kernels compile on first use (a few seconds) and are cached in `candidates/cuk/build/`.
 
-**Requirements:** PyTorch with CUDA, Triton, and `cuda-python`. The NVRTC 12.6 that ships with cu126 PyTorch builds for
-up to sm_90. Blackwell (sm_120) needs NVRTC >= 12.8, e.g. from a cu128 PyTorch.
+**Requirements:** PyTorch with CUDA, Triton, and `cuda-python`. NVRTC builds a native cubin for every architecture it
+knows (NVRTC 12.6 from cu126 PyTorch: up to sm_90; NVRTC >= 12.8 from cu128 PyTorch: also Blackwell sm_120). For a GPU
+newer than the local NVRTC it falls back to PTX for the newest known architecture, which the driver JIT-compiles.
 
 ## Requirements it was built against
 
@@ -139,3 +140,10 @@ up to sm_90. Blackwell (sm_120) needs NVRTC >= 12.8, e.g. from a cu128 PyTorch.
   - `rchol_fast.py`, `kcholqr.py`: kernel versions.
   - `kcholf` is the one `orth.py` uses.
 - **`results/`:** saved runs.
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE): free for noncommercial use (research, personal, education, nonprofits);
+commercial use needs a separate license.
+
+Required Notice: Copyright (c) 2026 Ozgur Guzeldereli (https://github.com/oguzeldereli/spanqr)

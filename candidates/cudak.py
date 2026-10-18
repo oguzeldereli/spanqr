@@ -21,9 +21,21 @@ def _check(res, what):
     return res[1:] if isinstance(res, tuple) and len(res) > 2 else (res[1] if isinstance(res, tuple) and len(res) == 2 else None)
 
 
+def _supported_archs():
+    n = _check(nvrtc.nvrtcGetNumSupportedArchs(), "nvrtcGetNumSupportedArchs")
+    return list(_check(nvrtc.nvrtcGetSupportedArchs(), "nvrtcGetSupportedArchs"))[:n]
+
+
 def _compile(src, name, arch, defines=()):
+    """cubin for sm_<arch>; if this NVRTC does not know the arch (e.g. NVRTC 12.6 on Blackwell sm_120), PTX for the
+    newest arch it supports, which the driver JIT-compiles at load time. Returns (image bytes, kind)."""
+    archs = _supported_archs()
+    if int(arch) in archs:
+        target, kind = f"--gpu-architecture=sm_{arch}", "cubin"
+    else:
+        target, kind = f"--gpu-architecture=compute_{max(a for a in archs if a <= int(arch))}", "ptx"
     prog = _check(nvrtc.nvrtcCreateProgram(src.encode(), name.encode(), 0, [], []), "nvrtcCreateProgram")
-    opts = [f"--gpu-architecture=sm_{arch}".encode(), b"--std=c++17", b"-default-device"]
+    opts = [target.encode(), b"--std=c++17", b"-default-device"]
     opts += [f"-D{d}".encode() for d in defines]
     res = nvrtc.nvrtcCompileProgram(prog, len(opts), opts)
     if int(res[0]) != 0:
@@ -31,10 +43,15 @@ def _compile(src, name, arch, defines=()):
         log = b" " * n
         nvrtc.nvrtcGetProgramLog(prog, log)
         raise RuntimeError(f"NVRTC compile of {name} failed:\n{log.decode(errors='replace')}")
-    n = _check(nvrtc.nvrtcGetCUBINSize(prog), "cubin size")
-    img = b" " * n
-    _check(nvrtc.nvrtcGetCUBIN(prog, img), "get cubin")
-    return img
+    if kind == "cubin":
+        n = _check(nvrtc.nvrtcGetCUBINSize(prog), "cubin size")
+        img = b" " * n
+        _check(nvrtc.nvrtcGetCUBIN(prog, img), "get cubin")
+    else:
+        n = _check(nvrtc.nvrtcGetPTXSize(prog), "ptx size")
+        img = b" " * n
+        _check(nvrtc.nvrtcGetPTX(prog, img), "get ptx")      # NUL-terminated, as cuModuleLoadData expects
+    return img, kind
 
 
 def module(src_path, defines=()):
@@ -49,12 +66,12 @@ def module(src_path, defines=()):
     if (key, dev) in _mods:
         return _mods[(key, dev)]
     _BUILD.mkdir(parents=True, exist_ok=True)
-    f = _BUILD / f"{Path(src_path).stem}_{arch}_{key}.cubin"
-    if f.exists():
-        img = f.read_bytes()
+    found = [p for p in (_BUILD / f"{Path(src_path).stem}_{arch}_{key}.{e}" for e in ("cubin", "ptx")) if p.exists()]
+    if found:
+        img = found[0].read_bytes()
     else:
-        img = _compile(src, Path(src_path).name, arch, defines)
-        f.write_bytes(img)
+        img, kind = _compile(src, Path(src_path).name, arch, defines)
+        (_BUILD / f"{Path(src_path).stem}_{arch}_{key}.{kind}").write_bytes(img)
     mod = _check(cu.cuModuleLoadData(img), "cuModuleLoadData")
     _mods[(key, dev)] = mod
     return mod
