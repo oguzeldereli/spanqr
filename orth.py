@@ -1,6 +1,6 @@
 """spanqr entry point.
 
-    import sys; sys.path.insert(0, "/path/to/spanqr")
+    pip install git+https://github.com/oguzeldereli/spanqr   (or put this directory on sys.path)
     from orth import orth
     Q = orth(X)          # X: fp32 CUDA [K, r] -> Q: fp32 CUDA [K, r], orthonormal columns, span(Q) = span(X)
 """

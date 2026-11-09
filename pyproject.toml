@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spanqr"
+version = "0.1.0"
+description = "Fast, robust orthonormal basis of a tall fp32 matrix's column span on consumer GPUs (CUDA + Triton)"
+readme = "README.md"
+license = {file = "LICENSE"}   # PolyForm Noncommercial 1.0.0
+authors = [{name = "Özgür Güzeldereli"}]
+requires-python = ">=3.10"
+dependencies = ["torch", "triton"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools]
+py-modules = ["orth"]
+packages = ["candidates", "qrbench"]
+
+[tool.setuptools.package-data]
+candidates = ["cuk/*.cu"]

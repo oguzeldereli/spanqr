@@ -4,8 +4,11 @@ A fast orthonormal basis for the column span of a tall fp32 matrix on consumer G
 robust Cholesky-QR with hand-written CUDA and Triton kernels, built as a drop-in replacement for `torch.linalg.qr(X)[0]`
 in the [TTF](https://github.com/oguzeldereli/ttf-ternary) optimizer.
 
+```bash
+pip install git+https://github.com/oguzeldereli/spanqr
+```
+
 ```python
-import sys; sys.path.insert(0, "/path/to/spanqr")
 from orth import orth
 
 Q = orth(X)   # X: fp32 CUDA [K, r]  ->  Q: fp32 CUDA [K, r], Q^T Q = I, span(Q) = span(X)
